@@ -17,12 +17,16 @@ uint8_t ENABLE_WRITE_TO_FILE = 0;
 // enable tcp data send
 uint8_t ENABLE_SEND_OVER_TCP = 1;
 
+// sleep setting - sleep for this much time
 char SLEEP_STRING[] = "00:00:01:00";
 
+// sd status variable
+uint8_t MAX_CONSECUTIVE_SEND_FAILS = 5;
+
 // WIFI settings ////////////////////////
-char ESSID[] = "HomeBox-D790_2.4G";
-char PASSW[] = "a5ec43d2e";
-char SERVER_IP[] = "192.168.1.32";
+char ESSID[] = "WETWORK";
+char PASSW[] = "water123";
+char SERVER_IP[] = "192.168.4.1";
 char SERVER_PORT[] = "12345";
 char LOCAL_PORT[]  = "3000";
 char MOTE_ID[] = "WET_01";
@@ -42,6 +46,8 @@ uint8_t socket = SOCKET0;
 uint16_t socket_handle = 0;
 // when was the last awake state
 unsigned long last_wake_up_millis;
+// consecutive send fails
+uint8_t consecutive_send_fails;
 
 /////////////////////////////////////////
 
@@ -283,10 +289,20 @@ void send_frame_over_tcp() {
   
   // send data and check response
   if ( WIFI_PRO.send(socket_handle, frame.buffer,frame.length) == 0 ) {
-    USB.println(F("STATUS: Send data OK"));   
+    USB.println(F("STATUS: Send data OK"));
+    // reset consecutive_send_fails
+    consecutive_send_fails = 0;
   } else {
     USB.println(F("ERROR: Error calling 'send' function"));
     WIFI_PRO.printErrorCode();       
+    consecutive_send_fails++;
+  }
+
+  // if we failed to send data one too many times - set error state to true
+  if (consecutive_send_fails >= MAX_CONSECUTIVE_SEND_FAILS) {
+    consecutive_send_fails = 0;
+    error = 1;
+    USB.println(F("ERROR: MAX_CONSECUTIVE_SEND_FAILS limit exceeded. Setting error state."));
   }
 }
 
@@ -306,6 +322,16 @@ void calibrate_sensors() {
 
   // EC: Configure the calibration values
   ConductivitySensor.setCalibrationPoints(point1_cond, point1_cal, point2_cond, point2_cal);
+}
+
+/**
+ * cem bed odin reset 
+ */
+void reset() {
+  USB.OFF();
+  RTC.OFF();
+  Water.OFF(); 
+  setup();
 }
 
 /**
@@ -336,8 +362,6 @@ void setup()  {
   Water.ON(); 
   USB.println(F("STATUS: WATER ON"));
 
-  
-
   /////////////////////////////////
   // write data to file?
   /////////////////////////////////
@@ -365,6 +389,9 @@ void setup()  {
     USB.println(F("STATUS: Send over TCP disabled."));
   }
 
+  // capture wake up millis
+  last_wake_up_millis = millis();
+
   USB.println(F("--------------SETUP DONE-----------------"));
 
 }
@@ -381,7 +408,8 @@ void loop() {
   }
 
   if (error == 1) {
-    USB.println(F("ERROR: Skipping loop."));
+    USB.println(F("ERROR: Got into some error state - will try to reset..."));
+    reset();
   } else {
 
     // Create new frame (ASCII)
