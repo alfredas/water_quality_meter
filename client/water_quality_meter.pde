@@ -12,6 +12,8 @@ char DATA_FOLDER[] = "DATA";
 long long AWAKE_MILLIS = 1LL * 60LL * 1000LL;
 
 // enable local file storage
+// this does not work due to SPI interference with WaterSensors
+// see: https://www.libelium.com/forum/viewtopic.php?f=53&t=25771
 uint8_t ENABLE_WRITE_TO_FILE = 0;
 
 // enable tcp data send
@@ -361,6 +363,9 @@ void setup()  {
   // turn on water sensors
   Water.ON(); 
   USB.println(F("STATUS: WATER ON"));
+  // must turn water on before turning on SD card 
+  // see thread: https://www.libelium.com/forum/viewtopic.php?f=53&t=25771
+  delay(500);
 
   /////////////////////////////////
   // write data to file?
